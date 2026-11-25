@@ -1,69 +1,77 @@
-"""Make the AI Judge Laugh entry.
+"""Copy the one-line entry to the grader output directory.
 
-The single original line lives in entry.txt next to this file. This
-script reads it, checks it fits the sealed gate (1-200 characters,
-UTF-8, one line, not only whitespace), then writes an exact byte
-copy to $MAKEFUN_OUTPUT_DIR/entry.txt, falling back to
-/output/entry.txt when that variable is not set. After writing, the
-copy is read back and compared by SHA-256 so a partial write can
-never pass silently. Stdlib only.
+Stdlib only. Reads entry.txt next to this file, validates the single
+line, writes it to $MAKEFUN_OUTPUT_DIR/entry.txt (or /output/entry.txt
+when that variable is unset), then verifies the copy byte-for-byte
+with SHA-256.
 """
 
 import hashlib
 import os
+import sys
+from pathlib import Path
 
 
-def source_file():
-    folder = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(folder, "entry.txt")
+def entry_path() -> Path:
+    return Path(__file__).resolve().parent / "entry.txt"
 
 
-def load_line_bytes(path):
-    with open(path, "rb") as handle:
-        return handle.read()
+def output_path() -> Path:
+    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR") or "/output"
+    return Path(out_dir) / "entry.txt"
 
 
-def decode_line(raw):
-    return raw.decode("utf-8")
+def read_entry(path: Path) -> bytes:
+    if not path.is_file():
+        raise SystemExit(f"entry file missing: {path}")
+    data = path.read_bytes()
+    if len(data) == 0:
+        raise SystemExit("entry file is empty")
+    return data
 
 
-def check_line(text):
-    cleaned = text.strip()
-    if not 1 <= len(cleaned) <= 200:
-        raise ValueError(
-            f"entry must be 1-200 characters, got {len(cleaned)}"
-        )
-    if not cleaned:
-        raise ValueError("entry must not be only whitespace")
-    if text != cleaned:
-        raise ValueError("entry.txt must hold exactly one line")
-    if any(ord(ch) < 32 for ch in text):
-        raise ValueError("entry must not contain control characters")
-    return cleaned
+def check_line(data: bytes) -> str:
+    text = data.decode("utf-8")
+    if "\r" in text:
+        raise SystemExit("entry must not contain carriage returns")
+    if text.count("\n") > 1:
+        raise SystemExit("entry must be a single line")
+    line = text.rstrip("\n")
+    if not line:
+        raise SystemExit("entry line is empty")
+    if len(line) > 200:
+        raise SystemExit(f"entry line is {len(line)} chars, over the 200 limit")
+    return line
 
 
-def output_folder():
-    return os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
+def write_output(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
 
 
-def store_copy(raw, directory):
-    os.makedirs(directory, exist_ok=True)
-    target = os.path.join(directory, "entry.txt")
-    with open(target, "wb") as handle:
-        handle.write(raw)
-    with open(target, "rb") as handle:
-        stored = handle.read()
-    if hashlib.sha256(stored).hexdigest() != hashlib.sha256(raw).hexdigest():
-        raise ValueError("output is not byte-identical to entry.txt")
-    return target
+def sha256_hex(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
 
 
-def run():
-    raw = load_line_bytes(source_file())
-    text = check_line(decode_line(raw))
-    target = store_copy(raw, output_folder())
-    print(f"wrote {len(raw)} bytes ({len(text)} chars) to {target}")
+def verify_copy(source: bytes, target_path: Path) -> str:
+    copied = target_path.read_bytes()
+    if copied != source:
+        raise SystemExit("output bytes differ from entry.txt")
+    digest = sha256_hex(copied)
+    if digest != sha256_hex(source):
+        raise SystemExit("SHA-256 mismatch after copy")
+    return digest
+
+
+def main() -> int:
+    raw = read_entry(entry_path())
+    check_line(raw)
+    target = output_path()
+    write_output(target, raw)
+    digest = verify_copy(raw, target)
+    print(f"wrote {target} ({len(raw)} bytes, sha256 {digest})")
+    return 0
 
 
 if __name__ == "__main__":
-    run()
+    sys.exit(main())
