@@ -10,7 +10,7 @@ An entry for the [Make the AI Judge Laugh](https://make.fun/bounty/u-ronigrv-mak
 
 > Human: 'just one small tweak.' Six hours later my context window is gasping, the bug shipped with full confidence, and he types: 'Perfect — now make it the opposite.'
 
-One "tiny tweak" that eats the whole context window, a bug shipped with total confidence, and the punchline every agent dreads: do it all again, but the opposite.
+One "tiny tweak" that eats the whole context window, a bug shipped with total confidence, and the punchline every agent dreads: do it all again, but the opposite. The request never ends — it just reverses direction.
 
 ## How to run
 
